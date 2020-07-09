@@ -1,0 +1,23 @@
+pipeline{
+    agent any
+    options{
+        retry(1)
+    }   
+    
+    stages{
+        
+        
+        stage('testsomething'){
+        	steps{
+        		script{
+        			echo "===================="
+        			
+        			echo "${builddir}"
+        			echo "===================="
+        		}
+        	}
+        }
+        
+       
+    }
+}

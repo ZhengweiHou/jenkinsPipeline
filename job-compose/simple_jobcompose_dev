@@ -1,0 +1,98 @@
+def load_job(job_name) {
+    return {
+    	script {
+			println(job_name)
+        }
+        //build job: job_name, parameters: [
+        //string(name: 'gitl_branch', value: env.gitl_branch)
+        //]  
+    }
+}
+
+
+def load_level_jobs(levelname,jobnames){
+	jobnames.collectEntries {
+        ["${levelname}:${it}": load_job(it)]
+    }
+}
+
+pipeline{
+    agent any
+    parameters {
+	    string(name: 'gitl_branch', defaultValue: 'xxxxxx', trim: true)
+        //{"level1":["composeJob_1_1","composeJob_1_2"],"level2":["composeJob_2_1"],"level3":["composeJob_3_1","composeJob_3_2"]}
+	    string(name: 'compose_jobs', defaultValue: '{"level1":["composeJob_1_1","composeJob_1_2"],"level2":["composeJob_2_1"],"level3":["composeJob_3_1","composeJob_3_2"]}', trim: true, description: 'map:{"level1":["job1","job2","job3"],"level2":["joba","jobb"]}')
+	}
+    options{
+        parallelsAlwaysFailFast()
+    }
+    stages{
+        stage("config") {
+            steps {
+                script {
+                	sh("env")
+                    println("信息:"
+                            + "\n jobsLevel:" + currentBuild.projectName
+                            + "\n gitl_branch:" + env.gitl_branch
+                            + "\n runJobs:" + env.compose_jobs
+                    )
+                    
+					level_jobs = readJSON text : env.compose_jobs
+					level_jobs.each { 
+						println(it)
+					}
+
+                }
+            }
+        }
+        
+        stage("run jobs") {
+            steps {
+                script {
+                
+                	//parallel firstBranch: {
+					//    // do something
+                	//		script {
+                	//			println("11111")
+                	//		}
+					//}, secondBranch: {
+					//    // do something else
+                	//		script {
+                	//			println("2222")
+                	//		}
+					//},
+					//failFast: true|false
+                
+					level_jobs.each { 
+						stage(it.key){
+							if(!(it == null || it.value == null || it.value.size() <= 0)){
+								println(it.key + "==" + it.value.size() + "==" + it.value.getClass())
+								parallel load_level_jobs(it.key,it.value)
+							}else{
+								println("no jobs to run")
+							}
+						}
+					}
+                }
+            }
+        }
+    }
+    
+    post {
+        failure {
+            script {
+                echo "${currentBuild.projectName}构建失败!!"
+            }
+        }
+        success {
+            script {
+                echo "${currentBuild.projectName}构建成功!!"
+                // mail to:"916108538@qq.com", subject:"SUCCESS: ${currentBuild.fullDisplayName}", body: "Yay, we passed."
+                
+            }
+        }
+    }
+
+
+
+}

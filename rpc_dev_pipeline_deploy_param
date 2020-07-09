@@ -1,0 +1,66 @@
+pipeline{
+    agent any
+    options{
+        retry(1)
+    }
+    
+    parameters {
+    	// 等价于UI界面配置：This project is parameterized
+        // string(name: 'DEPLOY_DIR', defaultValue: '/app/rpcusr/auto_deploy', trim: true, description: '部署服务器上执行拉包脚本的目录')
+        // string(name: 'DEPLOY_TARGET_DOCUMENTS', defaultValue: '', trim: true, description: '部署服务器上jar包拉取的目标地址~/apphome/[值]，若不配置默认目标地址将为lib')
+        // booleanParam(defaultValue: false, description: '手动构建时，是否进行部署', name: 'DEPLOY')
+
+		string(name: 'gitl_url')  // init param
+		string(name: 'gitl_branch')  // init param
+		string(name: 'gitl_user')  // init param
+		string(name: 'build_child_dir')  // init param
+		string(name: 'build_mvn_opt')  // init param
+		string(name: 'DEPLOY')  // init param
+		string(name: 'HOOK_DEPLOY')  // init param
+		string(name: 'DEPLOY_HOST')  // init param
+		string(name: 'DEPLOY_USER')  // init param
+		string(name: 'DEPLOY_DIR')  // init param
+		string(name: 'DEPLOY_TARGET_DOCUMENTS')  // init param
+        
+        // 参数说明：
+		// gitl_url                 目标git地址
+		// gitl_branch              目标git分支
+		// gitl_user                操作git的用户，提前在Credentials中配置userName和password凭据 
+		// build_child_dir          指定编译的git项目子目录，默认为git项目根目录
+		// build_mvn_opt            指定maven编译命令
+		// DEPLOY                   是否执行部署步骤（手动构建以此为准）
+		// HOOK_DEPLOY              是否允许hook触发部署（hook构建以此为准）
+		// DEPLOY_HOST              部署操作的远程主机
+		// DEPLOY_USER              部署操作的用户，提前在Credentials中配置userName和password凭据 
+		// DEPLOY_DIR               远程主机中部署脚本的位置
+		// DEPLOY_TARGET_DOCUMENTS  部署服务器上jar包拉取到的目标地址,默认为lib，~/apphome/${DEPLOY_TARGET_DOCUMENTS}
+        
+    }
+    
+   
+
+    stages{
+       
+        stage('InitConfig'){
+        	steps{
+        		script{
+	                
+        			println("构建参数信息:"
+        			+ "\ngitl_url               :" + env.gitl_url               
+        			+ "\ngitl_branch            :" + env.gitl_branch            
+        			+ "\nbuild_child_dir        :" + env.build_child_dir        
+        			+ "\nbuild_mvn_opt          :" + env.build_mvn_opt          
+        			+ "\nDEPLOY                 :" + env.DEPLOY                 
+        			+ "\nDEPLOY_HOST            :" + env.DEPLOY_HOST            
+        			+ "\nDEPLOY_USER            :" + env.DEPLOY_USER            
+        			+ "\nDEPLOY_DIR             :" + env.DEPLOY_DIR             
+        			+ "\nDEPLOY_TARGET_DOCUMENTS:" + env.DEPLOY_TARGET_DOCUMENTS
+        			)
+        		}
+        	}
+        }
+        
+    }
+    
+
+}

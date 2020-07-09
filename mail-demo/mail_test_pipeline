@@ -1,0 +1,97 @@
+pipeline{
+    agent any
+    options{
+        retry(1)
+    }
+
+    stages{
+        stage('testsomething'){
+        	steps{
+        		script{
+                    echo "===================="
+        			echo "===================="
+        
+        		}
+        	}
+        }
+        
+       
+    }
+    
+    
+    post {
+        failure {
+            script {
+                echo "${currentBuild.projectName}构建失败!!"
+            }
+        }
+        success {
+            script {
+                echo "${currentBuild.projectName}构建成功!!"
+                sh("env")
+                echo "======================"
+                
+                println(currentBuild.result)
+                
+                echo "======================"
+
+
+    def subject = "Jenkins Job : " + env.JOB_NAME + "/" + env.BUILD_ID + " has " +  currentBuild.result
+    def text = """
+    <!DOCTYPE html>
+        <html>    
+        <head>    
+        <meta charset="UTF-8">    
+        <title>${env.JOB_NAME}-第${env.BUILD_NUMBER}次构建日志</title>    
+        </head>    
+
+        <body leftmargin="8" marginwidth="0" topmargin="8" marginheight="4"    
+            offset="0">    
+            <table width="95%" cellpadding="0" cellspacing="0"  style="font-size: 11pt; font-family: Tahoma, Arial, Helvetica, sans-serif">    
+                <tr>    
+                    本邮件由系统自动发出，无需回复！<br/>       
+                    ${env.WORKSPACE}
+                </tr>    
+            </table>    
+        </body>    
+        </html>
+"""
+emailext(subject:subject, body:text,to: "916108538@qq.com",from: "houzw@xxxx.com")
+			}
+		
+		
+		
+		
+		// emailext (
+		//     subject: "${env.JOB_NAME} - Build # ${env.BUILD_NUMBER} !" + currentBuild.result,
+		//     // body: """<p>SUCCESSFUL: Job '${env.JOB_NAME} [${env.BUILD_NUMBER}]':</p>
+//     //     <p>Check console output at "<a href="${env.BUILD_URL}">${env.JOB_NAME} [${env.BUILD_NUMBER}]</a>"</p>""",
+		//     body: """
+//     <!DOCTYPE html>
+//         <html>    
+//         <head>    
+//         <meta charset="UTF-8">    
+//         <title>${env.JOB_NAME}-第${env.BUILD_NUMBER}次构建日志</title>    
+//         </head>    
+
+//         <body leftmargin="8" marginwidth="0" topmargin="8" marginheight="4"    
+//             offset="0">    
+//             <table width="95%" cellpadding="0" cellspacing="0"  style="font-size: 11pt; font-family: Tahoma, Arial, Helvetica, sans-serif">    
+//                 <tr>    
+//                     本邮件由系统自动发出，无需回复！<br/>       
+//                     ${env.WORKSPACE}
+//                 </tr>    
+//             </table>    
+//         </body>    
+//         </html>
+//                 """,
+		//                 to: "916108538@qq.com",
+		//                 from: "houzw@xxxx.com"
+		//             )
+		
+		
+				}
+			}
+			
+		}
+		

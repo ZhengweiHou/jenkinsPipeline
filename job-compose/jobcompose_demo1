@@ -1,0 +1,52 @@
+def load_job(job_name) {
+    return {
+        build job: job_name, parameters: [string(name: 'hzw_version', value: env.hzw_version)]  
+    }
+}
+
+pipeline{
+    agent any
+    parameters {
+	    string(name: 'hzw_version', defaultValue: 'xxxxxx', trim: true)
+	    string(name: 'hzw_jobs', defaultValue: 'job1,job2', trim: true, description: '')
+	}
+    stages{
+        stage("check") {
+            steps {
+                script {
+                    println("构建组信息:"
+                            + "\n jobsLevel:" + currentBuild.projectName
+                            + "\n runJobs:" + env.hzw_jobs
+                    )
+                }
+            }
+        }
+        stage("run jobs") {
+            steps {
+                script {
+                    def jobnames = env.hzw_jobs.split(',')
+                    
+                    def parallel_jobs = jobnames.collectEntries {
+                        ["job:${it}": load_job(it)]
+                    }
+                    
+                    parallel parallel_jobs
+                }
+            }
+        }
+    }
+    
+    post {
+        failure {
+            script {
+                echo "${currentBuild.projectName}构建失败!!"
+            }
+        }
+        success {
+            script {
+                echo "${currentBuild.projectName}构建成功!!"
+            }
+        }
+    }
+
+}

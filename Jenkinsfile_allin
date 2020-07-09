@@ -1,0 +1,264 @@
+pipeline{
+    agent any
+    options{
+        retry(1)
+    }
+    
+    parameters {
+    	// 等价于UI界面配置：This project is parameterized
+        string(name: 'DEPLOY_DIR', defaultValue: '/app/rpcusr/auto_deploy', description: '部署服务器上执行拉包脚本的目录')
+        // string(name: 'gitl_url', description: 'git项目地址--')
+    }
+    
+    environment {
+    	// 自定义配置
+    	gitl_url = "$gitl_url"
+        gitl_user = "$gitl_user"
+        gitl_branch = "$gitl_branch"
+        build_child_dir = "$build_child_dir"
+    
+		// 其他
+        workspace = pwd()
+        codedir = "code"
+        mvnHome = "$MAVEN_HOME"
+        jdkHome = "$JAVA_HOME"
+        
+        PATH = "${JAVA_HOME}/bin:${MAVEN_HOME}/bin:${PATH}"
+    }
+    
+    post {
+          //写相关post部分代码
+        always {
+            script {
+                echo "post:always-------------"
+            }
+        }
+        changed {
+            script {
+                echo "post:changed-------------状态有变化？"
+            }
+        }
+        failure {
+            script {
+                echo "post:failure-------------失败了？发邮件？"
+            }
+        }
+        success {
+            script {
+                echo "post:success-------------成功了？发邮件？"
+            }
+        }
+    }
+    
+    triggers {
+    	// spring-boot-child 任务构建成功时触发，等价于UI界面配置：Build after other projects are built
+    	upstream(upstreamProjects: 'spring-boot-child', threshold: hudson.model.Result.SUCCESS)
+    }
+    
+    stages{
+        stage('HookConfig') { 
+            steps{
+                script{
+                	//if(!githook_object_kind.trim().isEmpty() && githook_object_kind.trim() != 'null'){
+					if (env.githook_object_kind != null && !env.githook_object_kind.trim().isEmpty()) {
+                		echo "本次构建由hook触发"
+                		
+                		// gitlabhook 相关配置信息，依赖Generic Webhook Trigger插件配置Post content parameters [Variable:githook, Expression:$]
+				        githook_ref = "$githook_ref" // refs/heads/master
+				        githook_repository_name = "$githook_repository_name"	// spring-boot-parent-hzw
+				        githook_object_kind = "$githook_object_kind"
+				        
+                	    // 检查hook触发的项目名和该job目标git路径是否匹配
+	                    if (!gitl_url.matches(".*/" + githook_repository_name + ".git")){
+	                        error "目标项目${githook_repository_name}无法匹配目标地址${gitl_url}"
+	                    }
+	                    
+	                    def ref_list = githook_ref.tokenize('/')
+	                    def ref_type = ref_list[1]	// heads、tags
+	                    def ref_name = ref_list[2]	// master、v0.1
+	                    
+	                    // 设置hook中分支名
+	                    gitl_branch = ref_name
+                	}else{
+                		echo "本次构建非hook触发"
+                	}
+                }
+            }
+        }
+        
+        stage('InitConfig'){
+        	steps{
+        		script{
+        			echo "初始化构建参数"
+        		}
+        	}
+        }
+        
+        stage('CodeCheck') {
+            steps{
+                // git branch: "master", credentialsId: 'd87b6196-bae0-4195-88d6-7f85d76f52b1', url: 'http://172.27.0.2/gitlabtest/spring-boot-parent-hzw.git'
+                script{
+                    url="${gitl_url}"
+                    branch="${gitl_branch}"   // 目标分支也可以是tag号
+                    credentialsId="${gitl_user}"
+                    
+                    echo "=checkout url:${url} branch:${branch}="
+                }
+             
+                checkout([
+                    $class: 'GitSCM', 
+                    branches: [[name: "$branch"]], 
+                    doGenerateSubmoduleConfigurations: false, 
+                    extensions: [
+                        [$class: 'CleanBeforeCheckout'], 
+                        [$class: 'RelativeTargetDirectory', relativeTargetDir: "$codedir"], 
+                        [$class: 'SubmoduleOption', disableSubmodules: false, parentCredentials: true, recursiveSubmodules: true, reference: '', timeout: 3, trackingSubmodules: false]
+                    ], 
+                    submoduleCfg: [], 
+                    userRemoteConfigs: [
+                        [credentialsId: "$credentialsId", url: "$url"]
+                    ]
+                ]) 
+            }
+        }
+        
+        stage('Build') {
+            steps{
+            	script{
+	            	echo "开始构建..."
+					builddir="${workspace}/${codedir}"
+					
+					if (env.build_child_dir != null && !env.build_child_dir.trim().isEmpty() && env.build_child_dir.trim()!='null') {
+						echo "已配置构建子目录：${build_child_dir}"
+						builddir="${builddir}/${build_child_dir}"
+					}
+					
+					if (env.build_mvn_opt != null && !env.build_mvn_opt.trim().isEmpty() && env.build_mvn_opt.trim()!='null') {
+						echo "已配置构建指令：${build_mvn_opt}"
+						build_mvn_opt="${build_mvn_opt}"
+					}else{
+						echo "未配置构建指令，使用默认指令：clean install"
+						build_mvn_opt="clean install"
+					}
+					
+					echo "构建目录为：${builddir},构建指令：${build_mvn_opt}"
+					
+					echo "-----------${currentBuild.fullDisplayName}"
+            	}
+				
+            	// maven构建生成二进制包
+                dir("${builddir}"){
+            		// 此处需jenkins安装插件：Pipeline Maven Integration
+            		withMaven() {
+                		//sh "mvn clean deploy -Dmaven.test.skip=true"
+                		
+                		sh "mvn ${build_mvn_opt}"
+        			}
+        			
+        			
+                }
+                
+            }
+        }
+        
+        stage('Deploy-test') {
+            steps{
+            	script{
+            		echo "12312312"
+            		// TODO获取编译产出物列表信息
+            		
+            		//echo "==============================="
+            		//
+            		//echo "==============================="
+            		echo sh(returnStdout: true, script: 'env')
+            		//echo "==============================="
+            		//echo "currentBuild.number=${currentBuild.number}"
+					//echo "currentBuild.result=${currentBuild.result}"
+					//echo "currentBuild.currentResult=${currentBuild.currentResult}"
+					////echo "currentBuild.resultIsBetterOrEqualTo(String)=${currentBuild.resultIsBetterOrEqualTo(String)}"
+					////echo "currentBuild.resultIsWorseOrEqualTo(String)=${currentBuild.resultIsWorseOrEqualTo(String)}"
+					//echo "currentBuild.displayName=${currentBuild.displayName}"
+					//echo "currentBuild.fullDisplayName=${currentBuild.fullDisplayName}"
+					//echo "currentBuild.projectName=${currentBuild.projectName}"
+					//echo "currentBuild.fullProjectName=${currentBuild.fullProjectName}"
+					//echo "currentBuild.description=${currentBuild.description}"
+					//echo "currentBuild.id=${currentBuild.id}"
+					//echo "currentBuild.timeInMillis=${currentBuild.timeInMillis}"
+					//echo "currentBuild.startTimeInMillis=${currentBuild.startTimeInMillis}"
+					//echo "currentBuild.duration=${currentBuild.duration}"
+					//echo "currentBuild.durationString=${currentBuild.durationString}"
+					//echo "currentBuild.previousBuild=${currentBuild.previousBuild}"
+					//echo "currentBuild.previousBuildInProgress=${currentBuild.previousBuildInProgress}"
+					//echo "currentBuild.previousBuiltBuild=${currentBuild.previousBuiltBuild}"
+					//echo "currentBuild.previousCompletedBuild=${currentBuild.previousCompletedBuild}"
+					//echo "currentBuild.previousFailedBuild=${currentBuild.previousFailedBuild}"
+					//echo "currentBuild.previousNotFailedBuild=${currentBuild.previousNotFailedBuild}"
+					//echo "currentBuild.previousSuccessfulBuild=${currentBuild.previousSuccessfulBuild}"
+					//echo "currentBuild.nextBuild=${currentBuild.nextBuild}"
+					//echo "currentBuild.absoluteUrl=${currentBuild.absoluteUrl}"
+					//echo "currentBuild.buildVariables=${currentBuild.buildVariables}"
+					//echo "currentBuild.changeSets=${currentBuild.changeSets}"
+					//echo "currentBuild.upstreamBuilds=${currentBuild.upstreamBuilds}"
+					////echo "currentBuild.rawBuild=${currentBuild.rawBuild}"
+					//echo "currentBuild.keepLog=${currentBuild.keepLog}"
+            	}
+            	
+            	
+            	
+            	
+            	sh label: '', script: 'echo $JAVA_HOME'
+            }
+        }
+        
+        stage('Utility Steps method') {
+            steps {
+                script {
+                	jobsdir="${JENKINS_HOME}/jobs/${currentBuild.projectName}/builds/${currentBuild.id}/archive"
+                	dir("${jobsdir}"){
+	                    def files = findFiles(glob: '**/*.jar')
+	                    
+	                    def archiveMsg=""
+	                    
+	                    for(jarfile in files){
+	                    	if(jarfile.path.endsWith("sources.jar")) continue
+	                    	def pomfile=jarfile.path.substring(0, jarfile.path.lastIndexOf(".")) + ".pom"
+	                    	archiveMsg += sh(script: "echo 'jenkins \${project.groupId}    \${project.artifactId}    \${project.version}'| mvn -DforceStdout help:evaluate -f ${jobsdir}/${pomfile} | grep 'jenkins' |sed 's/jenkins\\s*//g'",returnStdout: true).trim() + "\n"
+	                    	//archiveMsg += sh(script: "echo '\${project.groupId}    \${project.artifactId}    \${project.version}'| mvn -q -DforceStdout help:evaluate -f ${jobsdir}/${pomfile}",returnStdout: true).trim() + "\n"
+	                    	//archiveMsg += sh(script: "echo '\${project.groupId}    \${project.artifactId}    \${project.version}'| mvn -q -DforceStdout org.apache.maven.plugins:maven-help-plugin:3.2.0:evaluate -f ${jobsdir}/${pomfile}",returnStdout: true).trim() + "\n"
+	                    	
+	                    	echo "${archiveMsg}"
+	                    }
+
+						// TODO过滤出需要拉包的id
+						
+						
+
+	                    echo "=========="
+	                    echo "${archiveMsg}"
+	                    echo "=========="
+	                    
+	                    def remote = [:]
+	                    remote.name='rpcdev2xxx'
+	                    remote.host='10.250.20.145'
+	                    remote.user='rpcusr'
+	                    remote.password='rpcusr'
+	                    remote.allowAnyHosts= true
+	                    //remote.pty=true
+	                    
+	                    //writeFile file:"deploy-${currentBuild.projectName}.sh", text: "#!/bin/bash\n if [ -f ~/.bash_profile ]; then \n source ~/.bash_profile \n fi \n cd ${DEPLOY_DIR} \n echo \"====111\${APPHOME}\"111"
+	                    //writeFile file:"deploy-${currentBuild.projectName}.sh", text: "cd ${DEPLOY_DIR} \n echo \"${archiveMsg}\" > pcklist.temp \n bash pkJenkins.sh -f pcklist.temp \n sleep 1 \n rm pcklist.temp"
+	                    // 这里生成的文件头增加声明#!/bin/bash --login ，确保执行脚本时环境变量的完整
+	                    writeFile file:"deploy-${currentBuild.projectName}.sh", text: "#!/bin/bash --login\n cd ${DEPLOY_DIR} \n echo \"${archiveMsg}\" > jenkinslist\$\$.temp \n bash pkJenkins.sh -f jenkinslist\$\$.temp \n rm jenkinslist\$\$.temp"
+	                    //writeFile file:"deploy-${currentBuild.projectName}.sh", text: "#!/bin/bash\n if [ -f ~/.bash_profile ]; then \n source ~/.bash_profile \n fi \n cd ${DEPLOY_DIR} \n echo \"${archiveMsg}\" > pcklist.temp \n sh pkJenkins.sh -f pcklist.temp \n sleep 1 \n rm pcklist.temp"
+	                    
+	                    //sshScript remote: remote,script: "deploy-${currentBuild.projectName}.sh"
+	                    
+	                }
+                }
+            }
+        }
+
+    }
+    
+
+}

@@ -1,0 +1,56 @@
+def get_mail_param(){
+	def param=['custom_company':'hehehe']
+	param.JOB_NAME=env.JOB_NAME
+	param.BUILD_ID=env.BUILD_ID
+	param.currentBuildResult=currentBuild.result
+	param.BUILD_URL=env.BUILD_URL
+	param.JOB_URL=env.JOB_URL
+	param.CASE=currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').shortDescription
+	
+	
+	//println('===================')
+	//println(currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause').shortDescription)
+	//println(currentBuild.getBuildCauses())
+	//println('===================')
+	
+	return param
+}
+
+ 
+pipeline{
+	
+	agent any
+	stages{
+		stage("init") {
+			steps{
+				script {
+
+					sendmail_demo = load env.WORKSPACE + "/mail-demo/Mail_demo.groovy"
+					
+					echo "=========="
+				}
+			}
+		}
+	}
+	
+	post{
+	    failure {
+	        script {
+	        	mail_param = get_mail_param()
+	            sendmail_demo.send_email_results(mail_param,"houzw@xxxx.com","916108538@qq.com")
+	        }
+	    }
+	    success {
+	        script {
+	        	mail_param = get_mail_param()
+	            sendmail_demo.send_email_results(mail_param,"houzw@xxxx.com","916108538@qq.com")
+	        }
+
+		}
+		changed {
+            script {
+                echo "post:changed-------------状态有变化？"
+            }
+        }
+	}
+}
